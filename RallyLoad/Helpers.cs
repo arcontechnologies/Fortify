@@ -418,9 +418,15 @@ namespace LoadStaging
 
         public static HttpClient WebAuthenticationWithToken(string proxy)
         {
+            // the config may hold a bare "host:port" without scheme; normalize before
+            // validation so both forms keep working (WebProxy(string) did this implicitly)
+            string proxyAddress = proxy.Contains("://") ? proxy : "http://" + proxy;
+
             Uri proxyUri;
-            if (!Uri.TryCreate(proxy, UriKind.Absolute, out proxyUri))
-                throw new ConfigurationErrorsException("The 'proxy' app setting is not a valid absolute URI.");
+            if (!Uri.TryCreate(proxyAddress, UriKind.Absolute, out proxyUri)
+                || (proxyUri.Scheme != Uri.UriSchemeHttp && proxyUri.Scheme != Uri.UriSchemeHttps)
+                || string.IsNullOrEmpty(proxyUri.Host))
+                throw new ConfigurationErrorsException("The 'proxy' app setting is not a valid proxy address.");
 
             HttpClientHandler handler = new HttpClientHandler
             {
