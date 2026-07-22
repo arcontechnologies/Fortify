@@ -100,18 +100,35 @@ namespace LoadStaging
             return _httpThrottle;
         }
 
-        // Validates a SQL identifier (schema/table/column name segment) against a strict
-        // allow-list pattern. Throws on any other input so unsafe values can never reach SQL.
+        // Validates a (possibly qualified) SQL identifier against a strict allow-list
+        // pattern. Qualified names such as "schema.table" or "database.schema.table" are
+        // accepted when every dot-separated segment is a valid identifier. Throws on any
+        // other input so unsafe values can never reach SQL.
         public static string ValidateIdentifier(string identifier, string parameterName)
         {
-            if (string.IsNullOrEmpty(identifier) || !SafeIdentifierRegex.IsMatch(identifier))
+            if (!string.IsNullOrEmpty(identifier))
             {
-                throw new ArgumentException(
-                    string.Format("Invalid SQL identifier '{0}': only letters, digits and underscores are allowed.",
-                        TruncateForLog(SanitizeForLog(identifier ?? "<null>"), 64)),
-                    parameterName);
+                string[] segments = identifier.Split('.');
+                if (segments.Length <= 3)
+                {
+                    bool allSegmentsValid = true;
+                    foreach (string segment in segments)
+                    {
+                        if (!SafeIdentifierRegex.IsMatch(segment))
+                        {
+                            allSegmentsValid = false;
+                            break;
+                        }
+                    }
+                    if (allSegmentsValid)
+                        return identifier;
+                }
             }
-            return identifier;
+
+            throw new ArgumentException(
+                string.Format("Invalid SQL identifier '{0}': only letters, digits, underscores and dots (as name separators) are allowed.",
+                    TruncateForLog(SanitizeForLog(identifier ?? "<null>"), 64)),
+                parameterName);
         }
 
         // Strips CR/LF/TAB so remote-controlled text cannot forge log entries.
